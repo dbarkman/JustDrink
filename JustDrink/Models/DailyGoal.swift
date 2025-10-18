@@ -11,9 +11,9 @@ import SwiftData
 
 @Model
 final class DailyGoal {
-    var id: UUID
-    var amount: Double
-    var unit: VolumeUnit
+    var id: UUID = UUID()
+    var amount: Double = 0
+    var unit: VolumeUnit? = nil
     
     init(amount: Double, unit: VolumeUnit) {
         self.id = UUID()
@@ -23,7 +23,7 @@ final class DailyGoal {
     
     // Convert goal to milliliters for calculations
     var amountInML: Double {
-        switch unit {
+        switch unit ?? .ml {
         case .oz:
             return amount * 29.5735
         case .ml:

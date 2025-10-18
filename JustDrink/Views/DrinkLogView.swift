@@ -12,13 +12,29 @@ import SwiftData
 struct DrinkLogView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @State private var groupedRecords: [(date: Date, records: [DrinkRecord], totalML: Double)] = []
-    @State private var dailyGoal: DailyGoal?
+    @Query(sort: \DrinkRecord.timestamp, order: .reverse) private var drinkRecords: [DrinkRecord]
+    @Query private var goals: [DailyGoal]
+    @State private var groupedRecordsCache: [(date: Date, records: [DrinkRecord], totalML: Double)] = []
+    
+    private var dailyGoal: DailyGoal? {
+        goals.first
+    }
+    
+    private func recomputeGroupedRecords() {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: drinkRecords) { record in
+            calendar.startOfDay(for: record.timestamp)
+        }
+        groupedRecordsCache = grouped.map { date, records in
+            let total = records.reduce(0) { $0 + $1.capacityInML }
+            return (date: date, records: records, totalML: total)
+        }.sorted { $0.date > $1.date }
+    }
     
     var body: some View {
         NavigationStack {
             List {
-                ForEach(groupedRecords, id: \.date) { group in
+                ForEach(groupedRecordsCache, id: \.date) { group in
                     Section {
                         ForEach(group.records) { record in
                             NavigationLink {
@@ -34,7 +50,7 @@ struct DrinkLogView: View {
                         DaySectionHeader(
                             date: group.date,
                             totalML: group.totalML,
-                            goalML: dailyGoal?.amountInML
+                            goalML: DataManager.shared.effectiveGoalML(for: group.date, context: modelContext)
                         )
                     }
                 }
@@ -48,34 +64,65 @@ struct DrinkLogView: View {
                 }
             }
             .onAppear {
-                loadData()
+                recomputeGroupedRecords()
+            }
+            .onChange(of: drinkRecords) { _, _ in
+                recomputeGroupedRecords()
             }
         }
-    }
-    
-    private func loadData() {
-        groupedRecords = DataManager.shared.getDrinkRecordsGroupedByDay(context: modelContext)
-        dailyGoal = DataManager.shared.getDailyGoal(context: modelContext)
     }
     
     private func deleteRecords(from records: [DrinkRecord], at offsets: IndexSet) {
         for index in offsets {
             modelContext.delete(records[index])
         }
-        try? modelContext.save()
-        loadData()
+        do {
+            try modelContext.save()
+        } catch {
+            print("Failed to save after deleting drink records: \(error)")
+        }
     }
 }
 
 struct DrinkRecordRow: View {
     let record: DrinkRecord
+    @Query private var containers: [Container]
+    
+    private var matchingContainer: Container? {
+        containers.first { $0.name == record.containerName }
+    }
     
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
+            // Container thumbnail
+            if let container = matchingContainer {
+                if let imageData = container.imageData,
+                   let uiImage = UIImage(data: imageData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 40, height: 40)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                } else {
+                    Image(systemName: "waterbottle.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 28, height: 40)
+                        .foregroundColor(DataManager.shared.getContainerColor(index: container.colorIndex))
+                }
+            } else {
+                // Fallback if container not found
+                Image(systemName: "waterbottle.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 28, height: 40)
+                    .foregroundColor(.gray)
+            }
+            
             VStack(alignment: .leading) {
                 Text(record.containerName)
                     .font(.headline)
-                Text("\(record.capacity.formatted()) \(record.unit.displayName)")
+                Text("\(record.capacity.formatted()) \(record.unit?.displayName ?? VolumeUnit.ml.displayName)")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -106,7 +153,7 @@ struct DaySectionHeader: View {
             }
             
             if let goalML = goalML {
-                GoalComparisonView(totalML: totalML, goalML: goalML)
+                GoalComparisonView(totalML: totalML, goalML: goalML, date: date)
             }
         }
         .padding(.vertical, 4)
@@ -129,6 +176,7 @@ struct DaySectionHeader: View {
 struct GoalComparisonView: View {
     let totalML: Double
     let goalML: Double
+    let date: Date
     
     var percentageOfGoal: Int {
         Int((totalML / goalML) * 100)
@@ -136,6 +184,10 @@ struct GoalComparisonView: View {
     
     var metGoal: Bool {
         totalML >= goalML
+    }
+    
+    var isToday: Bool {
+        Calendar.current.isDateInToday(date)
     }
     
     var body: some View {
@@ -148,12 +200,21 @@ struct GoalComparisonView: View {
                     .font(.caption)
                     .foregroundColor(.green)
             } else {
-                Image(systemName: "heart.fill")
-                    .foregroundColor(.orange)
-                    .font(.caption)
-                Text("\(percentageOfGoal)% of goal - Keep going! 💪")
-                    .font(.caption)
-                    .foregroundColor(.orange)
+                if isToday {
+                    Image(systemName: "heart.fill")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                    Text("\(percentageOfGoal)% of goal - Keep going! 💪")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                } else {
+                    Image(systemName: "heart.fill")
+                        .foregroundColor(.red)
+                        .font(.caption)
+                    Text("\(percentageOfGoal)% of goal - Every drop counts! 💧")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
             }
         }
     }
@@ -179,13 +240,14 @@ struct DrinkRecordEditView: View {
                     TextField("Capacity", text: $capacity)
                         .keyboardType(.decimalPad)
                     
-                    Picker("Unit", selection: $selectedUnit) {
+                    Picker("", selection: $selectedUnit) {
                         ForEach(VolumeUnit.allCases, id: \.self) { unit in
                             Text(unit.displayName).tag(unit)
                         }
                     }
                     .pickerStyle(.menu)
                 }
+                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
                 
                 DatePicker("Date & Time", selection: $selectedDate)
             }
@@ -202,9 +264,17 @@ struct DrinkRecordEditView: View {
         }
         .onAppear {
             containerName = record.containerName
-            capacity = String(record.capacity)
-            selectedUnit = record.unit
+            capacity = formatCapacity(record.capacity)
+            selectedUnit = record.unit ?? .ml
             selectedDate = record.timestamp
+        }
+    }
+    
+    private func formatCapacity(_ value: Double) -> String {
+        if value.truncatingRemainder(dividingBy: 1) == 0 {
+            return String(format: "%.0f", value)
+        } else {
+            return String(value)
         }
     }
     
@@ -220,7 +290,11 @@ struct DrinkRecordEditView: View {
         record.unit = selectedUnit
         record.timestamp = selectedDate
         
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            print("Failed to save edited drink record: \(error)")
+        }
         dismiss()
     }
 }

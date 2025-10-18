@@ -54,7 +54,11 @@ struct ContainerSetupView: View {
         for index in offsets {
             modelContext.delete(containers[index])
         }
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            print("Failed to save after deleting containers: \(error)")
+        }
     }
 }
 
@@ -82,7 +86,7 @@ struct ContainerRowView: View {
             VStack(alignment: .leading) {
                 Text(container.name)
                     .font(.headline)
-                Text("\(container.capacity.formatted()) \(container.unit.displayName)")
+                Text("\(container.capacity.formatted()) \(container.unit?.displayName ?? VolumeUnit.ml.displayName)")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -117,12 +121,13 @@ struct ContainerEditView: View {
                     HStack {
                         TextField("Capacity", text: $capacity)
                             .keyboardType(.decimalPad)
-                        
-                        Picker("Unit", selection: $selectedUnit) {
+                        Spacer(minLength: 8)
+                        Picker("", selection: $selectedUnit) {
                             ForEach(VolumeUnit.allCases, id: \.self) { unit in
                                 Text(unit.displayName).tag(unit)
                             }
                         }
+                        .labelsHidden()
                         .pickerStyle(.menu)
                     }
                 }
@@ -174,7 +179,7 @@ struct ContainerEditView: View {
                 if let container = container {
                     name = container.name
                     capacity = String(container.capacity)
-                    selectedUnit = container.unit
+                    selectedUnit = container.unit ?? selectedUnit
                     if let imageData = container.imageData {
                         selectedImage = UIImage(data: imageData)
                     }
@@ -217,7 +222,11 @@ struct ContainerEditView: View {
             modelContext.insert(newContainer)
         }
         
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            print("Failed to save container changes: \(error)")
+        }
         dismiss()
     }
 }
@@ -226,32 +235,20 @@ struct ContainerEditView: View {
 struct ImagePicker: View {
     @Binding var image: UIImage?
     @Environment(\.dismiss) private var dismiss
-    @State private var showingSourceSelection = true
-    @State private var sourceType: UIImagePickerController.SourceType = .photoLibrary
+    @State private var showingCamera = false
+    @State private var photoItem: PhotosPickerItem?
     
     var body: some View {
-        if showingSourceSelection {
+        if showingCamera {
+            // Keep existing camera flow via UIImagePickerController
+            ImagePickerController(image: $image, sourceType: .camera)
+        } else {
             VStack(spacing: 20) {
                 Text("Choose Photo Source")
                     .font(.headline)
                     .padding()
                 
-                Button(action: {
-                    sourceType = .camera
-                    showingSourceSelection = false
-                }) {
-                    Label("Take Photo", systemImage: "camera")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                }
-                
-                Button(action: {
-                    sourceType = .photoLibrary
-                    showingSourceSelection = false
-                }) {
+                PhotosPicker(selection: $photoItem, matching: .images) {
                     Label("Choose from Library", systemImage: "photo.on.rectangle")
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -260,14 +257,29 @@ struct ImagePicker: View {
                         .cornerRadius(10)
                 }
                 
-                Button("Cancel") {
-                    dismiss()
+                Button(action: { showingCamera = true }) {
+                    Label("Take Photo", systemImage: "camera")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
                 }
-                .padding()
+                
+                Button("Cancel") { dismiss() }
+                    .padding()
             }
             .padding()
-        } else {
-            ImagePickerController(image: $image, sourceType: sourceType)
+            .onChange(of: photoItem) { _, newItem in
+                guard let newItem else { return }
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self),
+                       let uiImage = UIImage(data: data) {
+                        image = uiImage
+                    }
+                    dismiss()
+                }
+            }
         }
     }
 }

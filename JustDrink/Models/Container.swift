@@ -22,14 +22,14 @@ enum VolumeUnit: String, Codable, CaseIterable {
 
 @Model
 final class Container {
-    var id: UUID
-    var name: String
-    var capacity: Double
-    var unit: VolumeUnit
+    var id: UUID = UUID()
+    var name: String = ""
+    var capacity: Double = 0
+    var unit: VolumeUnit? = nil
     var imageData: Data?
-    var colorIndex: Int // For default icon coloring
-    var createdAt: Date
-    var isDefault: Bool
+    var colorIndex: Int = 0 // For default icon coloring
+    var createdAt: Date = Date()
+    var isDefault: Bool = false
     
     init(name: String, capacity: Double, unit: VolumeUnit, imageData: Data? = nil, colorIndex: Int = 0, isDefault: Bool = false) {
         self.id = UUID()
@@ -44,7 +44,7 @@ final class Container {
     
     // Convert capacity to milliliters for internal calculations
     var capacityInML: Double {
-        switch unit {
+        switch unit ?? .ml {
         case .oz:
             return capacity * 29.5735
         case .ml:

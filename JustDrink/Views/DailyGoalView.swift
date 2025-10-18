@@ -12,27 +12,28 @@ import SwiftData
 struct DailyGoalView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @State private var dailyGoal: DailyGoal?
+    @Query private var goals: [DailyGoal]
     @State private var amount: String = ""
     @State private var selectedUnit: VolumeUnit = .oz
+    
+    private var dailyGoal: DailyGoal? {
+        goals.first
+    }
     
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     HStack {
-                        Text("Daily Goal:")
-                            .font(.headline)
-                        
-                        TextField("Amount", text: $amount)
+                        TextField("Daily Goal Amount", text: $amount)
                             .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                        
-                        Picker("Unit", selection: $selectedUnit) {
+                        Spacer(minLength: 8)
+                        Picker("", selection: $selectedUnit) {
                             ForEach(VolumeUnit.allCases, id: \.self) { unit in
                                 Text(unit.displayName).tag(unit)
                             }
                         }
+                        .labelsHidden()
                         .pickerStyle(.menu)
                     }
                 }
@@ -61,7 +62,13 @@ struct DailyGoalView: View {
                 }
             }
             .onAppear {
-                loadGoal()
+                if let goal = dailyGoal {
+                    amount = String(goal.amount)
+                    selectedUnit = goal.unit ?? selectedUnit
+                } else {
+                    // Default to user's locale
+                    selectedUnit = Locale.current.measurementSystem == .metric ? .liter : .oz
+                }
             }
         }
     }
@@ -71,26 +78,9 @@ struct DailyGoalView: View {
         return value > 0
     }
     
-    private func loadGoal() {
-        dailyGoal = DataManager.shared.getDailyGoal(context: modelContext)
-        if let goal = dailyGoal {
-            amount = String(goal.amount)
-            selectedUnit = goal.unit
-        } else {
-            // Default to user's locale
-            selectedUnit = Locale.current.measurementSystem == .metric ? .liter : .oz
-        }
-    }
-    
     private func saveGoal() {
         guard let amountValue = Double(amount) else { return }
-        
-        DataManager.shared.setDailyGoal(
-            context: modelContext,
-            amount: amountValue,
-            unit: selectedUnit
-        )
-        
+        DataManager.shared.setDailyGoal(context: modelContext, amount: amountValue, unit: selectedUnit)
         dismiss()
     }
     

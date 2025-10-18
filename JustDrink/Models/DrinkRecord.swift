@@ -11,11 +11,11 @@ import SwiftData
 
 @Model
 final class DrinkRecord {
-    var id: UUID
-    var timestamp: Date
-    var containerName: String
-    var capacity: Double
-    var unit: VolumeUnit
+    var id: UUID = UUID()
+    var timestamp: Date = Date()
+    var containerName: String = ""
+    var capacity: Double = 0
+    var unit: VolumeUnit? = nil
     
     init(timestamp: Date, containerName: String, capacity: Double, unit: VolumeUnit) {
         self.id = UUID()
@@ -27,7 +27,7 @@ final class DrinkRecord {
     
     // Convert capacity to milliliters for calculations
     var capacityInML: Double {
-        switch unit {
+        switch unit ?? .ml {
         case .oz:
             return capacity * 29.5735
         case .ml:

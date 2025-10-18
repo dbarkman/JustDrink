@@ -13,12 +13,16 @@ import UserNotifications
 struct RemindersConfigView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @State private var reminderSettings: ReminderSettings?
+    @Query private var settings: [ReminderSettings]
     @State private var isEnabled: Bool = false
     @State private var startTime: Date = Date()
     @State private var stopTime: Date = Date()
     @State private var frequency: ReminderFrequency = .oneHour
     @State private var showPermissionAlert = false
+    
+    private var reminderSettings: ReminderSettings? {
+        settings.first
+    }
     
     var body: some View {
         NavigationStack {
@@ -75,18 +79,13 @@ struct RemindersConfigView: View {
                 Text("Please enable notifications for JustDrink in Settings to receive drink reminders.")
             }
             .onAppear {
-                loadSettings()
+                if let settings = reminderSettings {
+                    isEnabled = settings.isEnabled
+                    startTime = settings.startTime ?? startTime
+                    stopTime = settings.stopTime ?? stopTime
+                    frequency = settings.frequency ?? .oneHour
+                }
             }
-        }
-    }
-    
-    private func loadSettings() {
-        reminderSettings = DataManager.shared.getReminderSettings(context: modelContext)
-        if let settings = reminderSettings {
-            isEnabled = settings.isEnabled
-            startTime = settings.startTime
-            stopTime = settings.stopTime
-            frequency = settings.frequency
         }
     }
     
@@ -131,6 +130,9 @@ struct RemindersConfigView: View {
             settings.startTime = startTime
             settings.stopTime = stopTime
             settings.frequency = frequency
+        } else {
+            let newSettings = ReminderSettings(isEnabled: isEnabled, startTime: startTime, stopTime: stopTime, frequency: frequency)
+            modelContext.insert(newSettings)
         }
         
         try? modelContext.save()

@@ -11,18 +11,26 @@ import SwiftData
 
 struct MainView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var containers: [Container]
-    @Query private var drinkRecords: [DrinkRecord]
-    @State private var appState: AppState?
-    @State private var dailyGoal: DailyGoal?
+    @Environment(\.scenePhase) private var scenePhase
+    @Query(sort: \Container.createdAt) private var containers: [Container]
+    @Query private var appStates: [AppState]
+    @Query private var goals: [DailyGoal]
+    @State private var todaysTotalML: Double = 0
     @State private var selectedContainerIndex: Int = 0
     @State private var showDuplicateAlert = false
     @State private var showContainerSetup = false
     @State private var showDrinkLog = false
     @State private var showReminders = false
     @State private var showDailyGoal = false
+    @State private var isInitialized = false
     
-    private let buttonSize: CGFloat = 120
+    private var appState: AppState? {
+        appStates.first
+    }
+    
+    private var dailyGoal: DailyGoal? {
+        goals.first
+    }
     
     var body: some View {
         NavigationStack {
@@ -32,7 +40,7 @@ struct MainView: View {
                     Spacer()
                     Menu {
                         Button(action: { showContainerSetup = true }) {
-                            Label("Container Setup", systemImage: "waterbottle.fill")
+                            Label("Containers", systemImage: "waterbottle.fill")
                         }
                         Button(action: { showDrinkLog = true }) {
                             Label("Drink Log", systemImage: "list.bullet")
@@ -55,59 +63,66 @@ struct MainView: View {
                 Spacer()
                     .frame(height: 40)
                 
-                // Big water drop button - almost full width
+                // Big water drop button - fixed, capped diameter
                 GeometryReader { geometry in
-                    VStack {
-                        Button(action: recordDrink) {
-                            Text("💧")
-                                .font(.system(size: 80))
-                                .frame(width: geometry.size.width - 50, height: geometry.size.width - 50)
-                                .background(containers.isEmpty ? Color.gray : Color.blue)
-                                .clipShape(Circle())
-                                .shadow(color: .black.opacity(0.2), radius: 15, x: 0, y: 5)
-                        }
-                        .disabled(containers.isEmpty)
-                        .frame(maxWidth: .infinity)
+                    let diameter = min(geometry.size.width, 320)
+                    Button(action: recordDrink) {
+                        Image(systemName: "waterbottle.fill")
+                            .font(.system(size: diameter * 0.5))
+                            .foregroundColor(.white)
+                            .frame(width: diameter, height: diameter)
+                            .background(containers.isEmpty ? Color.gray : Color.blue)
+                            .clipShape(Circle())
+                            .shadow(color: .black.opacity(0.2), radius: 15, x: 0, y: 5)
                     }
+                    .disabled(containers.isEmpty)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 }
-                .frame(height: UIScreen.main.bounds.width - 50)
-                .padding(.horizontal, 25)
+                .frame(height: 360)
                 
                 Spacer()
                 
                 // Horizontal scrolling container selection
                 if !containers.isEmpty {
-                    ScrollViewReader { proxy in
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 30) {
-                                ForEach(Array(containers.enumerated()), id: \.element.id) { index, container in
-                                    ContainerCardView(
-                                        container: container,
-                                        isSelected: index == selectedContainerIndex
-                                    )
-                                    .onTapGesture {
-                                        withAnimation {
-                                            selectedContainerIndex = index
-                                            appState?.selectedContainerId = container.id
-                                            try? modelContext.save()
-                                        }
+                    GeometryReader { geometry in
+                        ScrollViewReader { proxy in
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 30) {
+                                    ForEach(Array(containers.enumerated()), id: \.element.id) { index, container in
+                                        ContainerCardView(
+                                            container: container,
+                                            isSelected: index == selectedContainerIndex
+                                        )
+                        .onTapGesture {
+                            withAnimation {
+                                selectedContainerIndex = index
+                                if let state = appState {
+                                    state.selectedContainerId = container.id
+                                    do {
+                                        try modelContext.save()
+                                    } catch {
+                                        print("Failed to save selected container: \(error)")
                                     }
-                                    .id(index)
                                 }
                             }
-                            .padding(.horizontal, max((UIScreen.main.bounds.width - 130) / 2, 30))
                         }
-                        .frame(height: 140)
-                        .onChange(of: selectedContainerIndex) { _, newIndex in
-                            withAnimation {
-                                proxy.scrollTo(newIndex, anchor: .center)
+                                        .id(index)
+                                    }
+                                }
+                                .padding(.horizontal, max((geometry.size.width - 130) / 2, 30))
+                            }
+                            .onChange(of: selectedContainerIndex) { _, newIndex in
+                                withAnimation {
+                                    proxy.scrollTo(newIndex, anchor: .center)
+                                }
+                            }
+                            .onAppear {
+                                // Center the selected container
+                                proxy.scrollTo(selectedContainerIndex, anchor: .center)
                             }
                         }
-                        .onAppear {
-                            // Center the selected container
-                            proxy.scrollTo(selectedContainerIndex, anchor: .center)
-                        }
                     }
+                    .frame(height: 140)
                 }
                 
                 Spacer()
@@ -115,7 +130,7 @@ struct MainView: View {
                 // Progress bar or Set Goal button
                 if let goal = dailyGoal {
                     ProgressBarView(
-                        totalML: DataManager.shared.getTodaysTotalInML(context: modelContext),
+                        totalML: todaysTotalML,
                         goalML: goal.amountInML
                     )
                     .padding(.horizontal, 25)
@@ -158,15 +173,37 @@ struct MainView: View {
                 Text("You just recorded a drink less than a minute ago. Do you want to record another?")
             }
             .onAppear {
-                loadAppState()
-                DataManager.shared.initializeDefaultContainer(context: modelContext)
+                if !isInitialized {
+                    isInitialized = true
+                    DataManager.shared.initializeDefaultContainer(context: modelContext)
+                    loadAppState()
+                    updateTodaysTotal()
+                }
+            }
+            // Recalculate progress when app becomes active (e.g., in the morning)
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active {
+                    updateTodaysTotal()
+                }
+            }
+            // Recalculate on significant time changes (midnight, DST, time zone)
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+                updateTodaysTotal()
             }
         }
     }
     
     private func loadAppState() {
-        appState = DataManager.shared.getAppState(context: modelContext)
-        dailyGoal = DataManager.shared.getDailyGoal(context: modelContext)
+        // Create app state if it doesn't exist
+        if appState == nil {
+            let newState = AppState()
+            modelContext.insert(newState)
+            do {
+                try modelContext.save()
+            } catch {
+                print("Failed to create initial AppState: \(error)")
+            }
+        }
         
         // Set selected container based on saved state
         if let selectedId = appState?.selectedContainerId,
@@ -174,8 +211,33 @@ struct MainView: View {
             selectedContainerIndex = index
         } else if !containers.isEmpty {
             selectedContainerIndex = 0
-            appState?.selectedContainerId = containers[0].id
+            if let state = appState {
+                state.selectedContainerId = containers[0].id
+                do {
+                    try modelContext.save()
+                } catch {
+                    print("Failed to save default selected container: \(error)")
+                }
+            }
         }
+        
+        updateTodaysTotal()
+    }
+    
+    private func updateTodaysTotal() {
+        // Fetch only today's records
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: Date())
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+        
+        let descriptor = FetchDescriptor<DrinkRecord>(
+            predicate: #Predicate { record in
+                record.timestamp >= startOfDay && record.timestamp < endOfDay
+            }
+        )
+        
+        let todaysRecords = (try? modelContext.fetch(descriptor)) ?? []
+        todaysTotalML = todaysRecords.reduce(0) { $0 + $1.capacityInML }
     }
     
     private func recordDrink() {
@@ -198,14 +260,24 @@ struct MainView: View {
             timestamp: Date(),
             containerName: selectedContainer.name,
             capacity: selectedContainer.capacity,
-            unit: selectedContainer.unit
+            unit: selectedContainer.unit ?? .ml
         )
         
         modelContext.insert(record)
-        appState?.lastDrinkTimestamp = Date()
-        appState?.selectedContainerId = selectedContainer.id
         
-        try? modelContext.save()
+        if let state = appState {
+            state.lastDrinkTimestamp = Date()
+            state.selectedContainerId = selectedContainer.id
+        }
+        
+        do {
+            try modelContext.save()
+        } catch {
+            print("Failed to save new drink record: \(error)")
+        }
+        
+        // Update today's total after recording
+        updateTodaysTotal()
     }
 }
 
@@ -297,6 +369,6 @@ struct ProgressBarView: View {
 
 #Preview {
     MainView()
-        .modelContainer(for: [Container.self, DrinkRecord.self], inMemory: true)
+        .modelContainer(for: [Container.self, DrinkRecord.self, AppState.self, DailyGoal.self], inMemory: true)
 }
 

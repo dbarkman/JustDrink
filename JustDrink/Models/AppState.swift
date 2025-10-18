@@ -11,9 +11,9 @@ import SwiftData
 
 @Model
 final class AppState {
-    var id: UUID
-    var lastDrinkTimestamp: Date?
-    var selectedContainerId: UUID?
+    var id: UUID = UUID()
+    var lastDrinkTimestamp: Date? = nil
+    var selectedContainerId: UUID? = nil
     
     init() {
         self.id = UUID()

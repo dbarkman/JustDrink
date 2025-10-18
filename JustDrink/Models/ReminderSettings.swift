@@ -32,11 +32,11 @@ enum ReminderFrequency: String, Codable, CaseIterable {
 
 @Model
 final class ReminderSettings {
-    var id: UUID
-    var isEnabled: Bool
-    var startTime: Date
-    var stopTime: Date
-    var frequency: ReminderFrequency
+    var id: UUID = UUID()
+    var isEnabled: Bool = false
+    var startTime: Date? = nil
+    var stopTime: Date? = nil
+    var frequency: ReminderFrequency? = nil
     
     init(isEnabled: Bool = false, startTime: Date = Calendar.current.date(from: DateComponents(hour: 8, minute: 0)) ?? Date(), stopTime: Date = Calendar.current.date(from: DateComponents(hour: 22, minute: 0)) ?? Date(), frequency: ReminderFrequency = .oneHour) {
         self.id = UUID()

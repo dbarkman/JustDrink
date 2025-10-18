@@ -19,14 +19,12 @@ struct JustDrinkApp: App {
             ReminderSettings.self,
             AppState.self
         ])
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            cloudKitDatabase: .automatic
-        )
+        
+        // Use CloudKit-backed store (automatic picks the default container from entitlements)
+        let configuration = ModelConfiguration(cloudKitDatabase: .automatic)
 
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
@@ -35,6 +33,10 @@ struct JustDrinkApp: App {
     var body: some Scene {
         WindowGroup {
             MainView()
+                .onAppear {
+                    // Kick off default data init on background context to reduce first-run UI jank
+                    DataManager.shared.initializeDefaultContainerAsync(container: sharedModelContainer)
+                }
         }
         .modelContainer(sharedModelContainer)
     }

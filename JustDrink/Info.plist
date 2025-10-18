@@ -6,9 +6,5 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>JustDrink needs access to your photo library to add custom container photos.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>JustDrink needs access to your camera to take photos of your containers.</string>
 </dict>
 </plist>

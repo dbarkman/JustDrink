@@ -18,7 +18,7 @@ class NotificationManager {
     // Rotating notification messages with water emojis
     private let notificationMessages: [(message: String, emoji: String)] = [
         ("Time to hydrate!", "💧"),
-        ("Don't forget to drink water!", "💦"),
+        ("Don't forget your H2O!", "💦"),
         ("Keep that water flowing!", "🚰"),
         ("Stay cool and hydrated!", "🧊"),
         ("Ride the hydration wave!", "🌊")
@@ -48,34 +48,47 @@ class NotificationManager {
             return
         }
         
-        // Create notifications for each frequency interval
-        var currentHour = startHour
-        var currentMinute = startMinute
-        var notificationCount = 0
+        // Helper to iterate minutes within a range with wrap at 24h
+        func iterate(from start: (h: Int, m: Int), to stop: (h: Int, m: Int), action: (_ hour: Int, _ minute: Int) -> Void) {
+            var hour = start.h
+            var minute = start.m
+            var count = 0
+            while true {
+                action(hour, minute)
+                count += 1
+                minute += frequency.minutes
+                if minute >= 60 {
+                    hour += minute / 60
+                    minute = minute % 60
+                }
+                hour = hour % 24
+                let currentTotal = hour * 60 + minute
+                let stopTotal = stop.h * 60 + stop.m
+                if start.h * 60 + start.m <= stopTotal {
+                    // same-day window
+                    if currentTotal > stopTotal { break }
+                } else {
+                    // cross-midnight window
+                    if currentTotal > stopTotal && (hour * 60 + minute) >= (start.h * 60 + start.m) { break }
+                }
+                if count > 200 { break }
+            }
+        }
         
-        while true {
-            // Check if we've passed the stop time
-            let currentTotalMinutes = currentHour * 60 + currentMinute
-            let stopTotalMinutes = stopHour * 60 + stopMinute
-            
-            if currentTotalMinutes > stopTotalMinutes {
-                break
+        let startTotal = startHour * 60 + startMinute
+        let stopTotal = stopHour * 60 + stopMinute
+        if startTotal <= stopTotal {
+            // Same-day range
+            iterate(from: (startHour, startMinute), to: (stopHour, stopMinute)) { h, m in
+                scheduleNotification(hour: h, minute: m, context: context)
             }
-            
-            // Schedule notification
-            scheduleNotification(hour: currentHour, minute: currentMinute, context: context)
-            notificationCount += 1
-            
-            // Move to next interval
-            currentMinute += frequency.minutes
-            if currentMinute >= 60 {
-                currentHour += currentMinute / 60
-                currentMinute = currentMinute % 60
+        } else {
+            // Cross-midnight: start..23:59 then 00:00..stop
+            iterate(from: (startHour, startMinute), to: (23, 59)) { h, m in
+                scheduleNotification(hour: h, minute: m, context: context)
             }
-            
-            // Safety check to prevent infinite loop
-            if notificationCount > 100 {
-                break
+            iterate(from: (0, 0), to: (stopHour, stopMinute)) { h, m in
+                scheduleNotification(hour: h, minute: m, context: context)
             }
         }
     }

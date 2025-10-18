@@ -2,14 +2,14 @@
 
 ## ✅ Completed Features
 
-### Data Models (SwiftData + CloudKit)
+### Data Models (SwiftData)
 - **Container**: Stores water containers with name, capacity, unit, optional photo, and color index
 - **DrinkRecord**: Records drink history with timestamp, container details (snapshot at time of recording)
 - **DailyGoal**: Optional daily hydration goal
 - **ReminderSettings**: Notification preferences and schedule
 - **AppState**: Tracks last drink time and selected container
 
-All models are configured with CloudKit automatic sync.
+All models are stored locally using SwiftData.
 
 ### Main Screen
 - ✅ Horizontal scrolling container selection with centered selection indicator
@@ -81,7 +81,7 @@ All models are configured with CloudKit automatic sync.
 
 ### Design Patterns
 - **Singleton**: `DataManager` and `NotificationManager` (per your preference)
-- **SwiftData**: Modern persistence with CloudKit sync
+- **SwiftData**: Modern local persistence
 - **No Combine**: Pure SwiftUI state management
 
 ### Key Files
@@ -89,7 +89,7 @@ All models are configured with CloudKit automatic sync.
 - `Views/` - All SwiftUI views (one per screen)
 - `DataManager.swift` - Centralized data operations
 - `NotificationManager.swift` - Notification scheduling
-- `JustDrinkApp.swift` - App entry point with CloudKit configuration
+- `JustDrinkApp.swift` - App entry point with local ModelContainer configuration
 
 ## 🎨 UI/UX Highlights
 - Clean, simple interface focused on one primary action
@@ -116,8 +116,8 @@ All models are configured with CloudKit automatic sync.
 
 All permissions are handled with appropriate Info.plist descriptions.
 
-## ☁️ iCloud Sync
-CloudKit sync is configured as **automatic**. Users signed into iCloud will see their data sync across devices automatically.
+## ☁️ Sync
+This build uses a local SwiftData store. If CloudKit sync is desired later, enable iCloud entitlements and update the ModelContainer configuration accordingly.
 
 ## 🚀 Ready to Ship!
 The app is complete and ready for testing. Once you add the default water bottle image, you'll have a fully functional MVP ready for the App Store! 🎉
