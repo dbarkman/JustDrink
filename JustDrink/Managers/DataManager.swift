@@ -242,17 +242,23 @@ class DataManager {
     
     // Format volume for display based on locale
     func formatVolumeForDisplay(_ volumeInML: Double) -> String {
+        let parts = volumeParts(volumeInML)
+        return "\(parts.value) \(parts.unit)"
+    }
+
+    // The same display volume split into number and unit, for the big readout on the main screen
+    func volumeParts(_ volumeInML: Double) -> (value: String, unit: String) {
         let locale = Locale.current
         let usesMetric = locale.measurementSystem == .metric
-        
+
         if usesMetric {
             // Display in liters with decimals
             let liters = volumeInML / 1000.0
-            return String(format: "%.3f L", liters)
+            return (String(format: "%.3f", liters), "L")
         } else {
             // Display in ounces
             let ounces = volumeInML / 29.5735
-            return String(format: "%.0f oz", ounces)
+            return (String(format: "%.0f", ounces), "oz")
         }
     }
     
@@ -281,7 +287,7 @@ class DataManager {
     
     // Get rainbow colors for default containers
     func getContainerColor(index: Int) -> Color {
-        let colors: [Color] = [.blue, .red, .green, .orange, .purple, .pink, .yellow, .cyan]
+        let colors = Theme.containerColors
         return colors[index % colors.count]
     }
 }

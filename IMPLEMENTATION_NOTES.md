@@ -9,15 +9,16 @@
 - **ReminderSettings**: Notification preferences and schedule
 - **AppState**: Tracks last drink time and selected container
 
-All models are stored locally using SwiftData.
+All models are stored with SwiftData and sync through iCloud (CloudKit).
 
 ### Main Screen
-- ✅ Horizontal scrolling container selection with centered selection indicator
-- ✅ Large water drop button (💧) to record drinks
+- ✅ Today's date and total at the top, with the percentage of the daily goal (or a "Set Goal" button)
+- ✅ Large round glass button to record a drink; its water level shows progress toward the goal, with a gentle wave (still when Reduce Motion is on)
+- ✅ Haptic tap when a drink is recorded
 - ✅ 1-minute duplicate tap protection with confirmation alert
-- ✅ Progress bar showing daily progress toward goal (or "Set Goal" button)
-- ✅ Menu button (top right) to access all screens
-- ✅ Disabled button state when no containers exist
+- ✅ Horizontal scrolling container cards (picture, name, size) with the selected one centered and checked
+- ✅ Floating bottom bar for Drink Log, Containers, Daily Goal and Reminders
+- ✅ Disabled glass and an "Add a container" prompt when no containers exist
 - ✅ Remembers last selected container
 
 ### Container Setup Screen
@@ -53,8 +54,7 @@ All models are stored locally using SwiftData.
 - ✅ Frequency options: 30 min, 1 hour, 2 hours
 
 ### Notifications
-- ✅ 5 rotating fun messages with water emojis (💧💦🚰🧊🌊)
-- ✅ Shows today's progress in notification body
+- ✅ Titled "Just Drink", with 5 rotating fun messages with water emojis (💧💦🚰🧊🌊) as the body
 - ✅ Daily recurring schedule between start and stop times
 - ✅ Properly canceled when disabled
 
@@ -81,31 +81,37 @@ All models are stored locally using SwiftData.
 
 ### Design Patterns
 - **Singleton**: `DataManager` and `NotificationManager` (per your preference)
-- **SwiftData**: Modern local persistence
+- **SwiftData**: Persistence, synced through CloudKit
 - **No Combine**: Pure SwiftUI state management
 
 ### Key Files
 - `Models/` - All SwiftData models
 - `Views/` - All SwiftUI views (one per screen)
+- `Views/Theme.swift` - Colors (light and dark), rounded type, navigation title style
+- `Views/Components.swift` - Shared pieces: the water glass, container icons, progress bar, button style
 - `DataManager.swift` - Centralized data operations
 - `NotificationManager.swift` - Notification scheduling
-- `JustDrinkApp.swift` - App entry point with local ModelContainer configuration
+- `JustDrinkApp.swift` - App entry point with the CloudKit-backed ModelContainer
 
 ## 🎨 UI/UX Highlights
-- Clean, simple interface focused on one primary action
+- Clean, simple interface focused on one primary action: tap the glass
+- Watery blue palette with SF Rounded type, in light and dark mode
+- App icon of a round glass of water, with dark and tinted versions
+- Every screen one tap away in the bottom bar
 - Encouraging messaging (no shame-based motivation)
 - Smart defaults (500ml bottle ready to go)
 - Locale-aware unit display
 - Color-coded default containers for easy identification
+- Dynamic Type throughout; VoiceOver labels on the glass and container cards
 
 ## 🧪 Testing the App
 
 1. Build and run on iOS 18.0+ device or simulator
 2. Default container should appear immediately
-3. Tap the water drop to record a drink
+3. Tap the glass to record a drink
 4. Try tapping again within 1 minute to see duplicate alert
-5. Add containers through the menu
-6. Set a daily goal to see progress bar
+5. Add containers with Containers in the bottom bar
+6. Set a daily goal to see the glass fill
 7. Check drink log to see grouped records
 8. Enable reminders and approve notifications
 
@@ -117,7 +123,7 @@ All models are stored locally using SwiftData.
 All permissions are handled with appropriate Info.plist descriptions.
 
 ## ☁️ Sync
-This build uses a local SwiftData store. If CloudKit sync is desired later, enable iCloud entitlements and update the ModelContainer configuration accordingly.
+The SwiftData store syncs through the iCloud container `iCloud.RedMesaStudios.JustDrink` (`cloudKitDatabase: .automatic`). Because of the iCloud entitlement, signing needs Xcode signed in to the developer account; the general team profile can't sign it.
 
 ## 🚀 Ready to Ship!
 The app is complete and ready for testing. Once you add the default water bottle image, you'll have a fully functional MVP ready for the App Store! 🎉

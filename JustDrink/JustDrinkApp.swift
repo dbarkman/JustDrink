@@ -30,9 +30,14 @@ struct JustDrinkApp: App {
         }
     }()
 
+    init() {
+        Theme.styleNavigationBars()
+    }
+
     var body: some Scene {
         WindowGroup {
             MainView()
+                .tint(Theme.tint)
                 .onAppear {
                     // Kick off default data init on background context to reduce first-run UI jank
                     DataManager.shared.initializeDefaultContainerAsync(container: sharedModelContainer)
