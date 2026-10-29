@@ -17,11 +17,11 @@ class NotificationManager {
     
     // Rotating notification messages with water emojis
     private let notificationMessages: [(message: String, emoji: String)] = [
-        ("Time to hydrate!", "💧"),
-        ("Don't forget your H2O!", "💦"),
-        ("Keep that water flowing!", "🚰"),
-        ("Stay cool and hydrated!", "🧊"),
-        ("Ride the hydration wave!", "🌊")
+        ("💧 Time to hydrate!", "💧"),
+        ("💦 Don't forget your H2O!", "💦"),
+        ("🚰 Keep that water flowing!", "🚰"),
+        ("🧊 Stay cool and hydrated!", "🧊"),
+        ("🌊 Ride the hydration wave!", "🌊")
     ]
     
     private var currentMessageIndex: Int {
@@ -96,16 +96,12 @@ class NotificationManager {
     private func scheduleNotification(hour: Int, minute: Int, context: ModelContext) {
         let content = UNMutableNotificationContent()
         
-        // Get today's total
-        let todaysTotalML = DataManager.shared.getTodaysTotalInML(context: context)
-        let formattedTotal = DataManager.shared.formatVolumeForDisplay(todaysTotalML)
-        
         // Get next message
         let messageInfo = notificationMessages[currentMessageIndex]
         currentMessageIndex = (currentMessageIndex + 1) % notificationMessages.count
         
-        content.title = messageInfo.message
-        content.body = "\(messageInfo.emoji) \(formattedTotal) recorded today"
+        content.title = "Just Drink"
+        content.body = messageInfo.message
         content.sound = .default
         
         // Create date components for the trigger
