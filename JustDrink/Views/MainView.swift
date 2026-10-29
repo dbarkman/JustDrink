@@ -41,6 +41,11 @@ struct MainView: View {
         selectedContainerIndex < containers.count ? containers[selectedContainerIndex] : nil
     }
 
+    // While a sheet covers the main screen, the glass stops animating and stops reading motion
+    private var sheetOpen: Bool {
+        showContainerSetup || showDrinkLog || showReminders || showDailyGoal
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -50,7 +55,7 @@ struct MainView: View {
 
                     // The glass: tap to record a drink; its water level is today's progress
                     Button(action: recordDrink) {
-                        WaterGlass(level: glassLevel, amountText: selectedContainer.map(capacityText))
+                        WaterGlass(level: glassLevel, amountText: selectedContainer.map(capacityText), live: !sheetOpen)
                     }
                     .buttonStyle(PressScaleStyle())
                     .disabled(containers.isEmpty)

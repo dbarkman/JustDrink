@@ -15,6 +15,7 @@ All models are stored with SwiftData and sync through iCloud (CloudKit).
 ### Main Screen
 - ✅ Today's date and total at the top, with the percentage of the daily goal (or a "Set Goal" button)
 - ✅ Large round glass button to record a drink; its water level shows progress toward the goal, with a gentle wave (still when Reduce Motion is on)
+- ✅ Tilting the phone sloshes the water: it stays level with the ground, lags a quick tilt, overshoots and settles, with bigger waves while it moves (a damped spring on Core Motion gravity; off with Reduce Motion, paused while a sheet covers the screen)
 - ✅ Haptic tap when a drink is recorded
 - ✅ 1-minute duplicate tap protection with confirmation alert
 - ✅ Horizontal scrolling container cards (picture, name, size) with the selected one centered and checked
@@ -94,6 +95,8 @@ All models are stored with SwiftData and sync through iCloud (CloudKit).
 - `Views/` - All SwiftUI views (one per screen)
 - `Views/Theme.swift` - Colors (light and dark), rounded type, navigation title style
 - `Views/Components.swift` - Shared pieces: the water glass, container icons, progress bar, button style
+- `Views/TiltSpring.swift` - The slosh physics: level angle from gravity and the damped spring (plain math, no frameworks)
+- `Views/WaterTilt.swift` - Feeds Core Motion gravity into the spring while the glass is on screen
 - `DataManager.swift` - Centralized data operations
 - `NotificationManager.swift` - Notification scheduling
 - `JustDrinkApp.swift` - App entry point with the CloudKit-backed ModelContainer

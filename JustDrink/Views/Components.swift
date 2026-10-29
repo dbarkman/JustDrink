@@ -48,29 +48,43 @@ struct ContainerIcon: View {
 struct WaterGlass: View {
     let level: Double
     let amountText: String?
+    // False while something covers the glass; the waves and the tilt pause
+    var live: Bool = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @State private var tilt = WaterTilt()
+
+    private var moving: Bool {
+        live && !reduceMotion && scenePhase == .active
+    }
 
     var body: some View {
         GeometryReader { proxy in
             let d = proxy.size.width
-            let amplitude = d * 0.028
+            let calm = d * 0.028
+            // Room above the waterline for the biggest sloshing waves
+            let headroom = calm * 2.6
             ZStack {
                 Circle().fill(Theme.glass)
-                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || scenePhase != .active)) { timeline in
+                TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !moving)) { timeline in
                     let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
+                    let amplitude = calm * (1 + 1.6 * tilt.swing)
                     ZStack(alignment: .top) {
-                        WaveShape(phase: t * 1.3 + 1.6, amplitude: amplitude)
+                        WaveShape(phase: t * 1.3 + 1.6, amplitude: amplitude, baseline: headroom)
                             .fill(Theme.waterBack)
-                            .offset(y: -amplitude * 0.9)
-                        WaveShape(phase: t * 1.8, amplitude: amplitude)
+                            .offset(y: -calm * 0.9)
+                        WaveShape(phase: t * 1.8, amplitude: amplitude, baseline: headroom)
                             .fill(Theme.water)
                     }
-                    .frame(width: d, height: d + amplitude * 2)
-                    // Fully hidden below the rim at 0, brimming at 1
-                    .offset(y: (1 - min(max(level, 0), 1)) * (d + amplitude * 2) - amplitude)
+                    .frame(width: d, height: d + headroom * 2)
+                    // Waterline fully hidden below the rim at 0, brimming at 1
+                    .offset(y: (1 - min(max(level, 0), 1)) * (d + headroom * 2) - headroom)
+                    .animation(.spring(duration: 1.0, bounce: 0.2), value: level)
+                    // Turned about the glass's center, which keeps the same amount of water inside the circle;
+                    // outside the level animation so a new drink doesn't animate the tilt too
+                    .frame(width: d, height: d)
+                    .rotationEffect(.radians(tilt.angle))
                 }
-                .animation(.spring(duration: 1.0, bounce: 0.2), value: level)
             }
             .clipShape(Circle())
             .overlay(Circle().strokeBorder(Theme.ring, lineWidth: d * 0.028))
@@ -105,18 +119,31 @@ struct WaterGlass: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .shadow(color: Theme.water.opacity(0.18), radius: 20, y: 10)
+        .onAppear { updateTilt() }
+        .onDisappear { tilt.stop() }
+        .onChange(of: moving) { _, _ in updateTilt() }
+    }
+
+    private func updateTilt() {
+        if moving {
+            tilt.start()
+        } else {
+            tilt.stop()
+        }
     }
 }
 
-// A band of water whose top edge is a sine wave; the band fills everything below the wave
+// A band of water whose top edge is a sine wave around `baseline` (measured down from the top);
+// the band fills everything below the wave
 struct WaveShape: Shape {
     var phase: Double
     var amplitude: CGFloat
+    var baseline: CGFloat
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
         func y(at x: CGFloat) -> CGFloat {
-            rect.minY + amplitude + amplitude * CGFloat(sin(Double(x / rect.width) * 2 * .pi + phase))
+            rect.minY + baseline + amplitude * CGFloat(sin(Double(x / rect.width) * 2 * .pi + phase))
         }
         path.move(to: CGPoint(x: rect.minX, y: y(at: 0)))
         var x: CGFloat = 4
