@@ -6,6 +6,7 @@
 - **Container**: Stores water containers with name, capacity, unit, optional photo, and color index
 - **DrinkRecord**: Records drink history with timestamp, container details (snapshot at time of recording)
 - **DailyGoal**: Optional daily hydration goal
+- **DailyGoalHistory**: The goal in milliliters from each change (0 = removed), so past days are judged against the goal that applied then
 - **ReminderSettings**: Notification preferences and schedule
 - **AppState**: Tracks last drink time and selected container
 
@@ -19,21 +20,22 @@ All models are stored with SwiftData and sync through iCloud (CloudKit).
 - ✅ Horizontal scrolling container cards (picture, name, size) with the selected one centered and checked
 - ✅ Floating bottom bar for Drink Log, Containers, Daily Goal and Reminders
 - ✅ Disabled glass and an "Add a container" prompt when no containers exist
-- ✅ Remembers last selected container
+- ✅ Remembers last selected container; when containers are added or deleted the selection stays on it, or moves to the card now in its place
+- ✅ Total updates as soon as a drink is recorded, edited or deleted, at midnight, and when the app returns to the foreground
 
 ### Container Setup Screen
 - ✅ List view of all containers with photos/icons
 - ✅ Tap to edit, swipe to delete
 - ✅ Add new containers with required capacity field
 - ✅ Unit picker: oz, ml, L
-- ✅ Optional photo (camera or library)
+- ✅ Optional photo (camera or library), stored as a JPEG at most 1024 px on its longest side; re-encoded only when it changes
 - ✅ Rainbow color coding for containers using default SF Symbol (waterbottle.fill)
-- ✅ Default 500ml Costco water bottle created on first launch
+- ✅ Default 500ml Costco water bottle created on first launch; a launch clean-up removes duplicate copies of that default (from iCloud sync) and never touches containers the user made
 
 ### Drink Log Screen
 - ✅ Records grouped by day with totals
 - ✅ Shows "Today", "Yesterday", or formatted date
-- ✅ Displays goal comparison for each day (encouraging messages)
+- ✅ Displays goal comparison for each day (encouraging messages), against the goal in effect that day
 - ✅ Tap record to edit (name, capacity, unit, timestamp)
 - ✅ Swipe to delete records
 - ✅ Historical records never change when containers are modified/deleted
@@ -47,16 +49,19 @@ All models are stored with SwiftData and sync through iCloud (CloudKit).
 
 ### Reminders Config Screen
 - ✅ Enable/disable switch
-- ✅ Start time, stop time, and frequency pickers
+- ✅ Start time, stop time, and frequency pickers; start and stop default to 8:00 AM and 10:00 PM
 - ✅ Pickers disabled when switch is off
 - ✅ Requests notification permissions on first enable
 - ✅ Alert with Settings button if permissions are denied
 - ✅ Frequency options: 30 min, 1 hour, 2 hours
+- ✅ Nothing is scheduled or cancelled until Save; Close leaves the saved schedule as it was
+- ✅ A footer sums up the schedule in one sentence
 
 ### Notifications
 - ✅ Titled "Just Drink", with 5 rotating fun messages with water emojis (💧💦🚰🧊🌊) as the body
-- ✅ Daily recurring schedule between start and stop times
+- ✅ Daily recurring schedule from the start time through the stop time; a stop time earlier than the start runs past midnight into the next morning (`NotificationManager.reminderSlots`)
 - ✅ Properly canceled when disabled
+- ✅ When the app opens or returns to the foreground: scheduled from the saved settings if they're on and nothing is pending (a reinstall, a new phone, settings synced from iCloud), cancelled if they're off. An existing schedule is left alone, since its triggers follow the local clock when the time zone changes; `reminderScheduleVersion` forces one rebuild after an update that changes how slots are made
 
 ### Locale Support
 - ✅ Stores containers in user-entered units

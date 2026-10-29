@@ -133,6 +133,8 @@ struct ContainerEditView: View {
     @State private var capacity: String = ""
     @State private var selectedUnit: VolumeUnit = .ml
     @State private var selectedImage: UIImage?
+    // The photo the container had when the editor opened; saving keeps its stored data unless it changed
+    @State private var originalImage: UIImage?
     @State private var showingImagePicker = false
     @ScaledMetric(relativeTo: .body) private var photoHeight: CGFloat = 180
 
@@ -233,6 +235,7 @@ struct ContainerEditView: View {
                     selectedUnit = container.unit ?? selectedUnit
                     if let imageData = container.imageData {
                         selectedImage = UIImage(data: imageData)
+                        originalImage = selectedImage
                     }
                 }
             }
@@ -251,10 +254,12 @@ struct ContainerEditView: View {
             container.name = name
             container.capacity = capacityValue
             container.unit = selectedUnit
-            container.imageData = selectedImage?.jpegData(compressionQuality: 0.8)
+            if selectedImage !== originalImage {
+                container.imageData = selectedImage.flatMap(storedPhotoData)
+            }
         } else {
             // Creating new container
-            let imageData = selectedImage?.jpegData(compressionQuality: 0.8)
+            let imageData = selectedImage.flatMap(storedPhotoData)
 
             // Determine color index for containers without images
             var colorIndex = 0
@@ -280,6 +285,21 @@ struct ContainerEditView: View {
         }
         dismiss()
     }
+}
+
+// A container photo as stored: JPEG, scaled down so its longest side is at most 1024 pixels
+private func storedPhotoData(_ image: UIImage) -> Data? {
+    let maxSide: CGFloat = 1024
+    let pixelWidth = image.size.width * image.scale
+    let pixelHeight = image.size.height * image.scale
+    let ratio = min(1, maxSide / max(pixelWidth, pixelHeight, 1))
+    let size = CGSize(width: (pixelWidth * ratio).rounded(), height: (pixelHeight * ratio).rounded())
+    let format = UIGraphicsImageRendererFormat.default()
+    format.scale = 1
+    let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+        image.draw(in: CGRect(origin: .zero, size: size))
+    }
+    return resized.jpegData(compressionQuality: 0.8)
 }
 
 // Dashed drop zone shown until a container has a photo

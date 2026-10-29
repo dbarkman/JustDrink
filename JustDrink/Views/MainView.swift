@@ -81,7 +81,7 @@ struct MainView: View {
             .sheet(isPresented: $showContainerSetup) {
                 ContainerSetupView()
             }
-            .sheet(isPresented: $showDrinkLog) {
+            .sheet(isPresented: $showDrinkLog, onDismiss: updateTodaysTotal) {
                 DrinkLogView()
             }
             .sheet(isPresented: $showReminders) {
@@ -105,17 +105,27 @@ struct MainView: View {
                     DataManager.shared.initializeDefaultContainer(context: modelContext)
                     loadAppState()
                     updateTodaysTotal()
+                    NotificationManager.shared.rescheduleFromSavedSettings(context: modelContext)
                 }
             }
             // Recalculate progress when app becomes active (e.g., in the morning)
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     updateTodaysTotal()
+                    NotificationManager.shared.rescheduleFromSavedSettings(context: modelContext)
                 }
             }
             // Recalculate on significant time changes (midnight, DST, time zone)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
                 updateTodaysTotal()
+            }
+            // Recalculate after drinks are edited or deleted (the Drink Log saves through this same context)
+            .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave, object: modelContext)) { _ in
+                updateTodaysTotal()
+            }
+            // Keep the selection on the saved container when containers are added or deleted
+            .onChange(of: containers.map(\.id)) { _, _ in
+                syncSelection()
             }
         }
     }
@@ -313,6 +323,31 @@ struct MainView: View {
         }
 
         updateTodaysTotal()
+    }
+
+    // Points selectedContainerIndex back at the saved container after the list changes. If that container
+    // is gone, the card now in its place is selected and saved instead.
+    private func syncSelection() {
+        guard !containers.isEmpty else {
+            selectedContainerIndex = 0
+            return
+        }
+        withAnimation {
+            if let selectedId = appState?.selectedContainerId,
+               let index = containers.firstIndex(where: { $0.id == selectedId }) {
+                selectedContainerIndex = index
+            } else {
+                selectedContainerIndex = min(selectedContainerIndex, containers.count - 1)
+                if let state = appState {
+                    state.selectedContainerId = containers[selectedContainerIndex].id
+                    do {
+                        try modelContext.save()
+                    } catch {
+                        print("Failed to save re-synced selected container: \(error)")
+                    }
+                }
+            }
+        }
     }
 
     private func updateTodaysTotal() {

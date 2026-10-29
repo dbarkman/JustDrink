@@ -15,8 +15,9 @@ struct RemindersConfigView: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var settings: [ReminderSettings]
     @State private var isEnabled: Bool = false
-    @State private var startTime: Date = Date()
-    @State private var stopTime: Date = Date()
+    // Until settings are saved, start at the same 8:00 AM to 10:00 PM day as ReminderSettings
+    @State private var startTime: Date = Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: Date()) ?? Date()
+    @State private var stopTime: Date = Calendar.current.date(bySettingHour: 22, minute: 0, second: 0, of: Date()) ?? Date()
     @State private var frequency: ReminderFrequency = .oneHour
     @State private var showPermissionAlert = false
     @ScaledMetric(relativeTo: .headline) private var iconSide: CGFloat = 44
@@ -139,22 +140,19 @@ struct RemindersConfigView: View {
         return "You'll get a reminder \(every) from \(start) to \(stop)."
     }
 
+    // Turning reminders on asks for permission; nothing is scheduled or cancelled until Save
     private func handleToggleChange(_ newValue: Bool) {
-        if newValue {
-            // Check notification permissions
-            checkNotificationPermissions { authorized in
-                if !authorized {
-                    // Request permission
-                    requestNotificationPermission { granted in
-                        if !granted {
-                            showPermissionAlert = true
-                        }
+        guard newValue else { return }
+        // Check notification permissions
+        checkNotificationPermissions { authorized in
+            if !authorized {
+                // Request permission
+                requestNotificationPermission { granted in
+                    if !granted {
+                        showPermissionAlert = true
                     }
                 }
             }
-        } else {
-            // Cancel all notifications when disabled
-            NotificationManager.shared.cancelAllNotifications()
         }
     }
 

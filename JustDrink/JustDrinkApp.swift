@@ -16,6 +16,7 @@ struct JustDrinkApp: App {
             Container.self,
             DrinkRecord.self,
             DailyGoal.self,
+            DailyGoalHistory.self,
             ReminderSettings.self,
             AppState.self
         ])

@@ -170,8 +170,10 @@ class DataManager {
     func dedupeDefaultContainers(context: ModelContext) {
         let descriptor = FetchDescriptor<Container>()
         guard let allContainers = try? context.fetch(descriptor) else { return }
+        // Only the seeded default can be duplicated by sync; containers the user made stay, even identical ones
+        let defaults = allContainers.filter { $0.isDefault }
         // Group by identifying attributes of the default using a stable string key
-        let grouped = Dictionary(grouping: allContainers) { container in
+        let grouped = Dictionary(grouping: defaults) { container in
             let unitRaw = (container.unit ?? .ml).rawValue
             return "\(container.name)|\(container.capacity)|\(unitRaw)|\(container.isDefault ? "1" : "0")"
         }

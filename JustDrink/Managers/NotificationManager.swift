@@ -36,59 +36,69 @@ class NotificationManager {
     func scheduleNotifications(startTime: Date, stopTime: Date, frequency: ReminderFrequency, context: ModelContext) {
         // Cancel existing notifications first
         cancelAllNotifications()
-        
+
+        for slot in Self.reminderSlots(startTime: startTime, stopTime: stopTime, frequency: frequency) {
+            scheduleNotification(hour: slot.hour, minute: slot.minute, context: context)
+        }
+        UserDefaults.standard.set(Self.scheduleVersion, forKey: Self.scheduleVersionKey)
+    }
+
+    // The times of day reminders fire: from the start time through the stop time, every `frequency` minutes.
+    // A stop time earlier than the start time runs past midnight into the next morning.
+    static func reminderSlots(startTime: Date, stopTime: Date, frequency: ReminderFrequency) -> [(hour: Int, minute: Int)] {
         let calendar = Calendar.current
         let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
         let stopComponents = calendar.dateComponents([.hour, .minute], from: stopTime)
-        
+
         guard let startHour = startComponents.hour,
               let startMinute = startComponents.minute,
               let stopHour = stopComponents.hour,
               let stopMinute = stopComponents.minute else {
-            return
+            return []
         }
-        
-        // Helper to iterate minutes within a range with wrap at 24h
-        func iterate(from start: (h: Int, m: Int), to stop: (h: Int, m: Int), action: (_ hour: Int, _ minute: Int) -> Void) {
-            var hour = start.h
-            var minute = start.m
-            var count = 0
-            while true {
-                action(hour, minute)
-                count += 1
-                minute += frequency.minutes
-                if minute >= 60 {
-                    hour += minute / 60
-                    minute = minute % 60
-                }
-                hour = hour % 24
-                let currentTotal = hour * 60 + minute
-                let stopTotal = stop.h * 60 + stop.m
-                if start.h * 60 + start.m <= stopTotal {
-                    // same-day window
-                    if currentTotal > stopTotal { break }
-                } else {
-                    // cross-midnight window
-                    if currentTotal > stopTotal && (hour * 60 + minute) >= (start.h * 60 + start.m) { break }
-                }
-                if count > 200 { break }
-            }
-        }
-        
+
+        // Count in minutes from the start of the day, past 24:00 for a window that crosses midnight
         let startTotal = startHour * 60 + startMinute
-        let stopTotal = stopHour * 60 + stopMinute
-        if startTotal <= stopTotal {
-            // Same-day range
-            iterate(from: (startHour, startMinute), to: (stopHour, stopMinute)) { h, m in
-                scheduleNotification(hour: h, minute: m, context: context)
+        var stopTotal = stopHour * 60 + stopMinute
+        if stopTotal < startTotal {
+            stopTotal += 24 * 60
+        }
+        return stride(from: startTotal, through: stopTotal, by: frequency.minutes).map { total in
+            (hour: (total / 60) % 24, minute: total % 60)
+        }
+    }
+
+    // Bumped when schedules made by older builds need rebuilding; 2 clears the old midnight-wrap slots
+    private static let scheduleVersion = 2
+    private static let scheduleVersionKey = "reminderScheduleVersion"
+
+    // Brings the scheduled reminders in line with the saved settings: schedules them when they're on but none
+    // are pending (a reinstall, a new phone, or settings synced from iCloud) and cancels them when they're off.
+    // An existing schedule is otherwise left alone, because its triggers follow the local clock across time zones
+    // while the saved start and stop times don't; the one exception is a single rebuild after an update.
+    func rescheduleFromSavedSettings(context: ModelContext) {
+        guard let settings = try? context.fetch(FetchDescriptor<ReminderSettings>()).first else { return }
+        let isEnabled = settings.isEnabled
+        let startTime = settings.startTime
+        let stopTime = settings.stopTime
+        let frequency = settings.frequency ?? .oneHour
+        let needsRebuild = UserDefaults.standard.integer(forKey: Self.scheduleVersionKey) < Self.scheduleVersion
+
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { pending in
+            let hasReminders = pending.contains { $0.identifier.hasPrefix("reminder_") }
+            guard isEnabled, let startTime, let stopTime else {
+                if hasReminders {
+                    DispatchQueue.main.async { self.cancelAllNotifications() }
+                }
+                return
             }
-        } else {
-            // Cross-midnight: start..23:59 then 00:00..stop
-            iterate(from: (startHour, startMinute), to: (23, 59)) { h, m in
-                scheduleNotification(hour: h, minute: m, context: context)
-            }
-            iterate(from: (0, 0), to: (stopHour, stopMinute)) { h, m in
-                scheduleNotification(hour: h, minute: m, context: context)
+            guard needsRebuild || !hasReminders else { return }
+            center.getNotificationSettings { notificationSettings in
+                guard notificationSettings.authorizationStatus == .authorized else { return }
+                DispatchQueue.main.async {
+                    self.scheduleNotifications(startTime: startTime, stopTime: stopTime, frequency: frequency, context: context)
+                }
             }
         }
     }
